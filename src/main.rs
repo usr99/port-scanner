@@ -1,7 +1,7 @@
 use clap::{Parser};
 
 mod types;
-use types::port;
+use types::{port, scan};
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -17,8 +17,8 @@ struct Args {
 	ports: port::RangeArray,
 
 	/// Scan types
-	// #[arg(short, long, value_enum, default_value_t = Scan::SYN)]
-	// scan: Vec<Scan>,
+	#[arg(short, long, default_value_t = scan::ScanArray::new(), value_parser = scan::ScanParser)]
+	scan: scan::ScanArray,
 
 	/// File that contains ip addresses to scan
 	#[arg(short = 'f', long = "file")]
@@ -29,15 +29,8 @@ struct Args {
 	threads: u8
 }
 
-// struct ScanParams {
-// 	ip: Vec<std::net::IpAddr>,
-// 	ports: Vec<u16>,
-// 	scan_type: Vec<Scan>,
-// 	threads: u8
-// }
-
 fn main() {
 	let args = Args::parse();
 
-	println!("{:?}", args.ports);
+	println!("{}", args.scan);
 }

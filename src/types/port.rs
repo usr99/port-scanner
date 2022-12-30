@@ -64,11 +64,6 @@ impl clap::builder::TypedValueParser for RangeParser {
 			ports.0.push(Range { start: r[0], end: r[1] });
 		}
 
-		Ok(ports) // placeholder
+		Ok(ports)
 	}
 }
-
-// #[derive(Clone)]
-// enum Scan {
-	// SYN, NULL, ACK, FIN, XMAS, UDP
-// }
