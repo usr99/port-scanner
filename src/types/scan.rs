@@ -1,6 +1,6 @@
 use clap::error::ErrorKind;
 
-#[derive (Clone, Copy, Debug, PartialEq)]
+#[derive (Clone, Copy, Debug, PartialEq, Ord, PartialOrd, Eq)]
 pub enum Scan { SYN, NULL, ACK, FIN, XMAS, UDP, NONE }
 
 impl From<Scan> for String {
@@ -41,6 +41,16 @@ impl std::fmt::Display for Scan {
 pub struct ScanArray(pub Vec<Scan>);
 
 impl ScanArray {
+	pub fn inner(&self) -> &Vec<Scan> {
+		&self.0
+	}
+
+	pub fn inner_as_mut(&mut self) -> &mut Vec<Scan> {
+		&mut self.0
+	}
+}
+
+impl ScanArray {
 	pub fn new() -> Self {
 		ScanArray(vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP])
 	}
@@ -48,7 +58,7 @@ impl ScanArray {
 
 impl std::fmt::Display for ScanArray {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		self.0.iter().fold(Ok(()), |result, scan| {
+		self.inner().iter().fold(Ok(()), |result, scan| {
 			result.and_then(|_| write!(f, "{}{}", scan, match scan {
 				Scan::UDP => "",
 				_ => ",",
@@ -61,7 +71,8 @@ impl std::fmt::Display for ScanArray {
 pub struct ScanParser;
 
 impl ScanParser {
-	fn invalid_value(value: &str, cmd: &clap::Command) -> clap::Error {
+	#[allow(non_snake_case)]
+	fn InvalidValue(value: &str, cmd: &clap::Command) -> clap::Error {
 		clap::Error::raw(ErrorKind::ValueValidation, format!("\"{}\" is not a valid type of scan\n", value)).with_cmd(cmd)
 	}
 }
@@ -80,16 +91,18 @@ impl clap::builder::TypedValueParser for ScanParser {
 
 		let mut scans: ScanArray = ScanArray(Vec::new());
 		for scantype in str.split(',') {
-			let s = Scan::from(scantype.to_uppercase());
+			let s = Scan::from(scantype.trim().to_uppercase());
 
 			if s != Scan::NONE {
-				scans.0.push(s);
+				scans.inner_as_mut().push(s);
 			} else {
-				return Err(Self::invalid_value(scantype, cmd));
-
+				return Err(Self::InvalidValue(scantype, cmd));
 			}
 		}
 
+		let inner = scans.inner_as_mut();
+		inner.sort();
+		inner.dedup();
 		Ok(scans)
 	}
 }
