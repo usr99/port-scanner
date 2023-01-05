@@ -1,7 +1,5 @@
 use clap::Parser;
-
-#[path = "../src/types/cli.rs"]
-mod cli;
+use port_scanner::cli;
 
 #[test]
 fn port_basic_usage() {
@@ -12,7 +10,7 @@ fn port_basic_usage() {
 		cli::port::Range { start: 500,  end: 1000 }
 	];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(args) => assert_eq!(args.ports.inner(), &expected),
 		Err(_) => assert!(false, "Parsing failed !"),
 	};
@@ -26,7 +24,7 @@ fn port_duplicates() {
 		cli::port::Range { start: 10, end: 15 }
 	];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(args) => assert_eq!(args.ports.inner(), &expected),
 		Err(_) => assert!(false, "Parsing failed !"),
 	};
@@ -39,7 +37,7 @@ fn port_range_overlap() {
 		cli::port::Range { start: 1, end: 75 },
 	];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(args) => assert_eq!(args.ports.inner(), &expected),
 		Err(_) => assert!(false, "Parsing failed !"),
 	};
@@ -49,7 +47,7 @@ fn port_range_overlap() {
 fn port_range_too_big() {
 	let arguments = vec![clap::crate_name!(), "-p 1025-1"];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(_) => assert!(false, "Parsing should have failed !"),
 		Err(e) => assert_eq!(e.kind(), clap::error::ErrorKind::InvalidValue),
 	};
@@ -59,7 +57,7 @@ fn port_range_too_big() {
 fn port_bad_format() {
 	let arguments = vec![clap::crate_name!(), "-p 80-443-1024"];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(_) => assert!(false, "Parsing should have failed !"),
 		Err(e) => assert_eq!(e.kind(), clap::error::ErrorKind::ValueValidation),
 	};
@@ -69,7 +67,7 @@ fn port_bad_format() {
 fn port_invalid_value() {
 	let arguments = vec![clap::crate_name!(), "-p 0-512"];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(_) => assert!(false, "Parsing should have failed !"),
 		Err(e) => assert_eq!(e.kind(), clap::error::ErrorKind::ValueValidation),
 	};
@@ -84,7 +82,7 @@ fn scan_basic_usage() {
 		cli::scan::Scan::XMAS
 	];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(args) => assert_eq!(args.scans.inner(), &expected),
 		Err(_) => assert!(false, "Parsing failed !"),
 	};
@@ -102,7 +100,7 @@ fn scan_whitespaces() {
 		cli::scan::Scan::UDP
 	];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(args) => assert_eq!(args.scans.inner(), &expected),
 		Err(_) => assert!(false, "Parsing failed !"),
 	};
@@ -112,7 +110,7 @@ fn scan_whitespaces() {
 fn scan_bad_separator() {
 	let arguments = vec![clap::crate_name!(), "-s SYN/UDP"];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(_) => assert!(false, "Parsing should have failed !"),
 		Err(e) => assert_eq!(e.kind(), clap::error::ErrorKind::ValueValidation),
 	};
@@ -122,7 +120,7 @@ fn scan_bad_separator() {
 fn scan_invalid_value() {
 	let arguments = vec![clap::crate_name!(), "-s SYN,XXXMAS"];
 
-	match cli::Args::try_parse_from(arguments) {
+	match cli::args::Args::try_parse_from(arguments) {
 		Ok(_) => assert!(false, "Parsing should have failed !"),
 		Err(e) => assert_eq!(e.kind(), clap::error::ErrorKind::ValueValidation),
 	};

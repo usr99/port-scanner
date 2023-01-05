@@ -1,4 +1,0 @@
-- REFACTOOOOOOOOR
-	- generic template "Array" to replace ScanArray and RangeArray
-	- impl TryFrom<T> instead of From<T> for Scan
-	- validate function for Array
