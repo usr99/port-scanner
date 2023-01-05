@@ -1,7 +1,12 @@
 use clap::Parser;
 
-pub mod port;
-pub mod scan;
+// mod array;
+// mod port;
+// mod scan;
+
+// use array::Array;
+// use port::Range;
+// use scan::Scan;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -13,8 +18,8 @@ pub struct Args {
 	pub ip: Vec<String>,
 
 	/// Range of ports to scan
-	#[arg(short, long, default_value_t = port::RangeArray(vec![port::Range { start: 1, end: 1024}]), value_parser = port::RangeParser)]
-	pub ports: port::RangeArray,
+	#[arg(short, long, default_value_t = Array::<Range>::new(), value_parser = port::RangeParser)]
+	pub ports: Array<port::Range>,
 
 	/// Scan types
 	#[arg(short, long, default_value_t = scan::ScanArray::new(), value_parser = scan::ScanParser)]

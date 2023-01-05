@@ -1,5 +1,8 @@
 use clap::error::ErrorKind;
 
+mod array;
+use array::Array;
+
 #[derive (Clone, Copy, Debug, PartialEq, Ord, PartialOrd, Eq)]
 pub enum Scan { SYN, NULL, ACK, FIN, XMAS, UDP, NONE }
 
@@ -37,73 +40,79 @@ impl std::fmt::Display for Scan {
 	}
 }
 
-#[derive (Clone, Debug)]
-pub struct ScanArray(pub Vec<Scan>);
-
-impl ScanArray {
-	pub fn inner(&self) -> &Vec<Scan> {
-		&self.0
-	}
-
-	pub fn inner_as_mut(&mut self) -> &mut Vec<Scan> {
-		&mut self.0
-	}
-}
-
-impl ScanArray {
+impl Array<Scan> {
 	pub fn new() -> Self {
-		ScanArray(vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP])
+		Self (vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP])
 	}
 }
 
-impl std::fmt::Display for ScanArray {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		self.inner().iter().fold(Ok(()), |result, scan| {
-			result.and_then(|_| write!(f, "{}{}", scan, match scan {
-				Scan::UDP => "",
-				_ => ",",
-			}))
-		})
-	}
-}
+// #[derive (Clone, Debug)]
+// pub struct ScanArray(pub Vec<Scan>);
 
-#[derive (Clone)]
-pub struct ScanParser;
+// impl ScanArray {
+// 	pub fn inner(&self) -> &Vec<Scan> {
+// 		&self.0
+// 	}
 
-impl ScanParser {
-	#[allow(non_snake_case)]
-	fn InvalidValue(value: &str, cmd: &clap::Command) -> clap::Error {
-		clap::Error::raw(ErrorKind::ValueValidation, format!("\"{}\" is not a valid type of scan\n", value)).with_cmd(cmd)
-	}
-}
+// 	pub fn inner_as_mut(&mut self) -> &mut Vec<Scan> {
+// 		&mut self.0
+// 	}
+// }
 
-impl clap::builder::TypedValueParser for ScanParser {
-	type Value = ScanArray;
+// impl ScanArray {
+// 	pub fn new() -> Self {
+// 		ScanArray(vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP])
+// 	}
+// }
 
-	fn parse_ref(
-		&self,
-		cmd: &clap::Command,
-		arg: Option<&clap::Arg>,
-		raw_value: &std::ffi::OsStr
-	) -> Result<Self::Value, clap::Error> {
-		let inner = clap::builder::StringValueParser::new();
-		let str = inner.parse_ref(cmd, arg, raw_value)?;
+// impl std::fmt::Display for ScanArray {
+// 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+// 		self.inner().iter().fold(Ok(()), |result, scan| {
+// 			result.and_then(|_| write!(f, "{}{}", scan, match scan {
+// 				Scan::UDP => "",
+// 				_ => ",",
+// 			}))
+// 		})
+// 	}
+// }
 
-		let mut scans: ScanArray = ScanArray(Vec::new());
-		for scantype in str.split(',') {
-			let s = Scan::from(scantype.trim().to_uppercase());
+// #[derive (Clone)]
+// pub struct ScanParser;
 
-			if s != Scan::NONE {
-				scans.inner_as_mut().push(s);
-			} else {
-				return Err(Self::InvalidValue(scantype, cmd));
-			}
-		}
+// impl ScanParser {
+// 	#[allow(non_snake_case)]
+// 	fn InvalidValue(value: &str, cmd: &clap::Command) -> clap::Error {
+// 		clap::Error::raw(ErrorKind::ValueValidation, format!("\"{}\" is not a valid type of scan\n", value)).with_cmd(cmd)
+// 	}
+// }
 
-		let inner = scans.inner_as_mut();
-		inner.sort();
-		inner.dedup();
-		Ok(scans)
-	}
-}
+// impl clap::builder::TypedValueParser for ScanParser {
+// 	type Value = ScanArray;
+
+// 	fn parse_ref(
+// 		&self,
+// 		cmd: &clap::Command,
+// 		arg: Option<&clap::Arg>,
+// 		raw_value: &std::ffi::OsStr
+// 	) -> Result<Self::Value, clap::Error> {
+// 		let inner = clap::builder::StringValueParser::new();
+// 		let str = inner.parse_ref(cmd, arg, raw_value)?;
+
+// 		let mut scans: ScanArray = ScanArray(Vec::new());
+// 		for scantype in str.split(',') {
+// 			let s = Scan::from(scantype.trim().to_uppercase());
+
+// 			if s != Scan::NONE {
+// 				scans.inner_as_mut().push(s);
+// 			} else {
+// 				return Err(Self::InvalidValue(scantype, cmd));
+// 			}
+// 		}
+
+// 		let inner = scans.inner_as_mut();
+// 		inner.sort();
+// 		inner.dedup();
+// 		Ok(scans)
+// 	}
+// }
 
