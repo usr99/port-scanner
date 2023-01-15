@@ -1,5 +1,5 @@
 use clap::error::ErrorKind;
-use super::array::Array;
+use super::args::ArgIterator;
 
 #[derive (Clone, Copy, Debug, PartialEq, Ord, PartialOrd, Eq)]
 pub enum Scan { SYN, NULL, ACK, FIN, XMAS, UDP }
@@ -50,7 +50,7 @@ impl ScanParser {
 }
 
 impl clap::builder::TypedValueParser for ScanParser {
-	type Value = Array<Scan>;
+	type Value = ArgIterator<Scan>;
 
 	fn parse_ref(
 		&self,
@@ -61,7 +61,7 @@ impl clap::builder::TypedValueParser for ScanParser {
 		let inner = clap::builder::StringValueParser::new();
 		let str = inner.parse_ref(cmd, arg, raw_value)?;
 
-		let mut scans = Array::<Scan>::new();
+		let mut scans = ArgIterator::<Scan>::new();
 		for scan_name in str.split(',') {
 			let scantype = Scan::try_from(scan_name.trim().to_uppercase());
 			if let Ok(scantype) = scantype {

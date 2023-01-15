@@ -5,9 +5,9 @@ use port_scanner::cli;
 fn port_basic_usage() {
 	let arguments = vec![clap::crate_name!(), "-p 10-50,12,1,80-80,20-45,1000-500,5-10,50-80"];
 	let expected = vec![
-		cli::port::Range { start: 1,    end: 1    },
-		cli::port::Range { start: 5,    end: 80   },
-		cli::port::Range { start: 500,  end: 1000 }
+		cli::port::Range::new(1,   1   ),
+		cli::port::Range::new(5,   80  ),
+		cli::port::Range::new(500, 1000)
 	];
 
 	match cli::args::Args::try_parse_from(arguments) {
@@ -20,8 +20,8 @@ fn port_basic_usage() {
 fn port_duplicates() {
 	let arguments = vec![clap::crate_name!(), "-p 1,1,10-15,10-15"];
 	let expected = vec![
-		cli::port::Range { start: 1,  end: 1  },
-		cli::port::Range { start: 10, end: 15 }
+		cli::port::Range::new(1,  1 ),
+		cli::port::Range::new(10, 15)
 	];
 
 	match cli::args::Args::try_parse_from(arguments) {
@@ -34,7 +34,7 @@ fn port_duplicates() {
 fn port_range_overlap() {
 	let arguments = vec![clap::crate_name!(), "-p 1-50,25-75"];
 	let expected = vec![
-		cli::port::Range { start: 1, end: 75 },
+		cli::port::Range::new(1, 75),
 	];
 
 	match cli::args::Args::try_parse_from(arguments) {
