@@ -30,34 +30,28 @@ pub struct Args {
 	pub threads: u8
 }
 
-
 #[derive(Clone, Debug)]
-pub struct ArgIterator<T: Display> (pub Vec<T>);
+pub struct ArgIterator<T: Display> {
+	pub(super) inner: Vec<T>,
+	next: usize
+}
 
 impl<T: Display> ArgIterator<T>
 {
 	pub fn new() -> Self {
-		Self (vec![])
-	}
-
-	pub fn inner(&self) -> &Vec<T> {
-		&self.0
-	}
-
-	pub fn inner_as_mut(&mut self) -> &mut Vec<T> {
-		&mut self.0
+		Self { inner: vec![], next: 0 }
 	}
 }
 
 impl ArgIterator<Range> {	
 	pub fn default() -> Self {
-		Self (vec![Range::new(1, 1024)])
+		Self { inner: vec![Range::new(1, 1024)], next: 0 }
 	}
 }
 
 impl std::fmt::Display for ArgIterator<Range> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		self.inner().iter().fold(Ok(()), |result, range| {
+		self.inner.iter().fold(Ok(()), |result, range| {
 			result.and_then(|_| write!(f, "{}", range))
 		})
 	}	
@@ -67,30 +61,32 @@ impl Iterator for ArgIterator<Range> {
 	type Item = u16;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let range = match self.inner_as_mut().last_mut() {
-			Some(r) => r,
-			None => return None
-		};
+		if self.next < self.inner.len() {
+			let range = &mut self.inner[self.next];
 
-		match range.next() {
-			Some(port) => Some(port),
-			None => {
-				self.inner_as_mut().pop();
-				self.next()
+			match range.next() {
+				Some(port) => Some(port),
+				None => {
+					self.next += 1;
+					self.next()
+				}
 			}
+		} else {
+			self.next = 0;
+			None
 		}
 	}
 }
 
 impl ArgIterator<Scan> {
 	pub fn default() -> Self {
-		Self (vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP])
+		Self { inner: vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP], next: 0 }
 	}
 }
 
 impl std::fmt::Display for ArgIterator<Scan> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		self.inner().iter().fold(Ok(()), |result, scan| {
+		self.inner.iter().fold(Ok(()), |result, scan| {
 			result.and_then(|_| write!(f, "{}{}", scan, match scan {
 				Scan::UDP => "",
 				_ => ",",
@@ -103,6 +99,15 @@ impl Iterator for ArgIterator<Scan> {
 	type Item = Scan;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.inner_as_mut().pop()
+		let value;
+		if self.next < self.inner.len() {
+			value = Some(self.inner[self.next]);
+			self.next += 1;
+		} else {
+			value = None;
+			self.next = 0;
+		}
+
+		value
 	}
 }

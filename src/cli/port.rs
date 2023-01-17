@@ -1,22 +1,22 @@
 use clap::error::ErrorKind;
-use super::args::ArgIterator;
+use super::arg::ArgIterator;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Copy)]
 pub struct Range {
-	cur: u16,
-	end: u16,
-	done: bool
+	start: u16,
+	next: Option<u16>,
+	end: u16
 }
 
 impl Range {
 	pub fn new(start: u16, end: u16) -> Self {
-		Range { cur: start, end, done: false }
+		Range {start, next: Some(start), end }
 	}
 }
 
 impl std::fmt::Display for Range {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "{}-{}", self.cur, self.end)
+		write!(f, "{}-{}", self.start, self.end)
 	}
 }
 
@@ -24,17 +24,19 @@ impl Iterator for Range {
 	type Item = u16;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		if !self.done {
-			if self.cur != self.end {
-				let ret = Some(self.cur);
-				self.cur += 1;
-				return ret;
-			} else {
-				self.done = true;
-				Some(self.end)
+		match self.next {
+			Some(port) => {
+				if port < self.end {
+					self.next = Some(port + 1);
+				} else {
+					self.next = None;
+				}
+				Some(port)
+			},
+			None => {
+				self.next = Some(self.start);
+				None
 			}
-		} else {
-			None
 		}
 	}
 }
@@ -54,16 +56,13 @@ impl RangeParser {
 	}
 
 	fn validate(mut array: ArgIterator<Range>, cmd: &clap::Command) -> Result<ArgIterator<Range>, clap::Error> {
-
-		let inner = array.inner_as_mut();
-		inner.sort();
-
 		let mut last: Option<Range> = None;
 		let mut result: Vec<Range> = vec![];
 
-		for pair in inner.windows(2) {
+		array.inner.sort();
+		for pair in array.inner.windows(2) {
 			if let Some(ref mut tmp) = last {
-				if tmp.end >= pair[1].cur {
+				if tmp.end >= pair[1].start {
 					if tmp.end < pair[1].end {
 						tmp.end = pair[1].end;
 					}
@@ -72,11 +71,11 @@ impl RangeParser {
 					last = None;
 				}			
 			} else {
-				if pair[0].end >= pair[1].cur {
+				if pair[0].end >= pair[1].start {
 					if pair[0].end >= pair[1].end {
-						last = Some(Range::new(pair[0].cur, pair[0].end));
+						last = Some(Range::new(pair[0].start, pair[0].end));
 					} else {
-						last = Some(Range::new(pair[0].cur, pair[1].end));
+						last = Some(Range::new(pair[0].start, pair[1].end));
 					}
 				} else {
 					result.push(pair[0]);
@@ -87,14 +86,14 @@ impl RangeParser {
 		if let Some(last) = last {
 			result.push(last);
 		} else {
-			result.push(*inner.last().unwrap());
+			result.push(*array.inner.last().unwrap());
 		}
 
-		if result.iter().fold(0, |acc, r| acc + (r.end - r.cur) + 1) > 1024 {
+		if result.iter().fold(0, |acc, r| acc + (r.end - r.start) + 1) > 1024 {
 			return Err(Self::RangeTooBig(cmd));
 		}
 
-		*inner = std::mem::take(&mut result);
+		array.inner = std::mem::take(&mut result);
 		Ok(array)
 	}
 }
@@ -130,9 +129,9 @@ impl clap::builder::TypedValueParser for RangeParser {
 			}
 
 			if r[0] < r[1] {
-				ports.inner_as_mut().push(Range::new(r[0], r[1]));
+				ports.inner.push(Range::new(r[0], r[1]));
 			} else {
-				ports.inner_as_mut().push(Range::new(r[1], r[0]));
+				ports.inner.push(Range::new(r[1], r[0]));
 			}
 		}
 
