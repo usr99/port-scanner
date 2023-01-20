@@ -1,5 +1,5 @@
+use super::ArgIterator;
 use clap::error::ErrorKind;
-use super::arg::ArgIterator;
 
 #[derive (Clone, Copy, Debug, PartialEq, Ord, PartialOrd, Eq)]
 pub enum Scan { SYN, NULL, ACK, FIN, XMAS, UDP }
@@ -7,14 +7,29 @@ pub enum Scan { SYN, NULL, ACK, FIN, XMAS, UDP }
 impl From<Scan> for String {
 	fn from(scan: Scan) -> Self {
 		String::from(match scan {
-			Scan::SYN => "SYN",
-			Scan::NULL => "NULL",
-			Scan::ACK => "ACK",
-			Scan::FIN => "FIN",
-			Scan::XMAS => "XMAS",
-			Scan::UDP => "UDP"
+			Scan::SYN	=> "SYN",
+			Scan::NULL	=> "NULL",
+			Scan::ACK	=> "ACK",
+			Scan::FIN	=> "FIN",
+			Scan::XMAS	=> "XMAS",
+			Scan::UDP	=> "UDP"
 		})
 	}	
+}
+
+impl TryFrom<Scan> for u16 {
+	type Error = ();
+
+	fn try_from(scan: Scan) -> Result<Self, <Self as TryFrom<Scan>>::Error> {
+		match scan {
+			Scan::SYN	=> Ok(0b00_0010),
+			Scan::NULL	=> Ok(0b00_0000),
+			Scan::ACK	=> Ok(0b01_0000),
+			Scan::FIN	=> Ok(0b00_0001),
+			Scan::XMAS	=> Ok(0b10_1001),
+			_			=> Err(())
+		}
+	}
 }
 
 impl TryFrom<String> for Scan {
@@ -39,17 +54,51 @@ impl std::fmt::Display for Scan {
 	}
 }
 
-#[derive (Clone)]
-pub struct ScanParser;
+impl Default for ArgIterator<Scan> {
+	fn default() -> Self {
+		Self { inner: vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP], next: 0 }
+	}
+}
 
-impl ScanParser {
+impl std::fmt::Display for ArgIterator<Scan> {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		self.inner.iter().fold(Ok(()), |result, scan| {
+			result.and_then(|_| write!(f, "{}{}", scan, match scan {
+				Scan::UDP => "",
+				_ => ",",
+			}))
+		})
+	}
+}
+
+impl Iterator for ArgIterator<Scan> {
+	type Item = Scan;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let value;
+		if self.next < self.inner.len() {
+			value = Some(self.inner[self.next]);
+			self.next += 1;
+		} else {
+			value = None;
+			self.next = 0;
+		}
+
+		value
+	}
+}
+
+#[derive (Clone)]
+pub struct Parser;
+
+impl Parser {
 	#[allow(non_snake_case)]
 	fn InvalidValue(value: &str, cmd: &clap::Command) -> clap::Error {
 		clap::Error::raw(ErrorKind::ValueValidation, format!("\"{}\" is not a valid type of scan\n", value)).with_cmd(cmd)
 	}
 }
 
-impl clap::builder::TypedValueParser for ScanParser {
+impl clap::builder::TypedValueParser for Parser {
 	type Value = ArgIterator<Scan>;
 
 	fn parse_ref(

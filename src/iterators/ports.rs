@@ -1,5 +1,5 @@
+use super::ArgIterator;
 use clap::error::ErrorKind;
-use super::arg::ArgIterator;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Copy)]
 pub struct Range {
@@ -41,10 +41,45 @@ impl Iterator for Range {
 	}
 }
 
-#[derive(Clone)]
-pub struct RangeParser;
+impl Default for ArgIterator<Range> {
+	fn default() -> Self {
+		Self { inner: vec![Range::new(1, 1024)], next: 0 }
+	}
+}
 
-impl RangeParser {
+impl std::fmt::Display for ArgIterator<Range> {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		self.inner.iter().fold(Ok(()), |result, range| {
+			result.and_then(|_| write!(f, "{}", range))
+		})
+	}	
+}
+
+impl Iterator for ArgIterator<Range> {
+	type Item = u16;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.next < self.inner.len() {
+			let range = &mut self.inner[self.next];
+
+			match range.next() {
+				Some(port) => Some(port),
+				None => {
+					self.next += 1;
+					self.next()
+				}
+			}
+		} else {
+			self.next = 0;
+			None
+		}
+	}
+}
+
+#[derive(Clone)]
+pub struct Parser;
+
+impl Parser {
 	#[allow(non_snake_case)]
 	fn InvalidValue(value: &str, cmd: &clap::Command) -> clap::Error {
 		clap::Error::raw(ErrorKind::ValueValidation, format!("\"{}\" is not valid as a port number\n", value)).with_cmd(cmd)
@@ -98,7 +133,7 @@ impl RangeParser {
 	}
 }
 
-impl clap::builder::TypedValueParser for RangeParser {
+impl clap::builder::TypedValueParser for Parser {
 	type Value = ArgIterator<Range>;
 	
 	fn parse_ref(
