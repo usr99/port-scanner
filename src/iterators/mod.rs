@@ -1,5 +1,4 @@
-use std::fmt::Display;
-use std::cmp::PartialEq;
+use std::{cmp::PartialEq, fmt::Display};
 
 pub mod ports;
 pub mod scans;
@@ -62,7 +61,6 @@ fn port_iterator_empty() {
 	assert_eq!(None, arr.next());
 	assert_eq!(None, arr.next());
 }
-
 
 #[test]
 fn scan_iterator_basic() {
