@@ -7,10 +7,10 @@ description = "Detect open ports on a target host"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.68"
 clap = { version = "4.0.32", features = ["derive", "cargo"] }
-color-eyre = { version = "0.6.2", default-features = false }
 colored = "2.0.0"
-eyre = "0.6.8"
+dns-lookup = "1.0.8"
 pnet = { version = "0.31.0", features = ["std"] }
 rand = "0.8.5"
 socket = "0.0.7"

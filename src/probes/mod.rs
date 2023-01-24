@@ -7,7 +7,7 @@ use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::{MutableIpv4Packet, checksum};
 use pnet::packet::tcp::{MutableTcpPacket, ipv4_checksum as tcp_checksum};
 use pnet::packet::udp::{MutableUdpPacket, ipv4_checksum as udp_checksum};
-use eyre::Result;
+use anyhow::{Result, Context, anyhow};
 use rand::Rng;
 
 use crate::cli;
@@ -26,7 +26,6 @@ use crate::iterators::{ArgIterator, PortRange, ScanType};
 	** implemented as HashMap<String, HashMap<u16, ProbeStatus>>
 	** might be encapsulated in a struct for easier access
 */
-
 pub struct ProbeBuilder {
 	hosts: Peekable<IntoIter<Ipv4Addr>>,
 	ports: Peekable<ArgIterator<PortRange>>,
@@ -37,43 +36,54 @@ pub struct ProbeBuilder {
 }
 
 impl ProbeBuilder {
-	pub fn new(mut options: cli::Args) -> Result<Self> { // proper error handling plz
+	pub fn new(mut options: cli::Args) -> Result<Self> {
 		/* Load ip addresses from file */
 		if let Some(path) = &options.ip_file {
-			let file = std::fs::File::open(path)?;
+			let file = std::fs::File::open(path).with_context(|| format!("Cannot read \"{}\"", path.display()))?;
 			let buffer = BufReader::new(file);
 
 			for line in buffer.lines() {
 				options.ip.push(line?);
 			}
 		}
-		
+;
+		/* Turn string representation into actual IPv4 addresses */
+		let mut hosts: Vec<Ipv4Addr> = vec![];
+		for addr in options.ip.into_iter() {
+			match dns_lookup::lookup_host(&addr) {
+				Ok(array) => {
+					match array.iter().filter(|addr| addr.is_ipv4()).next() {
+						Some(IpAddr::V4(ip)) => hosts.push(*ip),
+						_ => eprintln!("\"{addr}\": failed to resolve hostname")
+					}
+				},
+				Err(e) => eprintln!("\"{addr}\": {e}")
+			};
+		}
+
+		if hosts.len() == 0 {
+			return Err(anyhow!("No valid target to scan"));
+		}
+
 		/* Find source IP address (needed to compute checksums) */
 		let interfaces = pnet::datalink::interfaces();
 		let device = match interfaces.iter()
 			.find(|i| i.is_up() && !i.is_loopback() && !i.ips.is_empty()) {
 				Some(dev) => dev,
-				None => return Err(eyre::ErrReport::msg("no interface found"))
+				None => return Err(anyhow!("No source address found"))
+		};
+		
+		let source_addr = match device.ips.iter().filter(|ip| ip.is_ipv4()).map(|ipnet| ipnet.ip()).next() {
+			Some(IpAddr::V4(ip)) => ip,
+			_ => return Err(anyhow!("No IPv4 source address found"))
 		};
 
-		/* Turn string representation into actual IPv4 addresses */
-		let mut hosts: Vec<Ipv4Addr> = vec![];
-		for addr in options.ip.into_iter() {
-			match addr.parse() {
-				Ok(addr) => hosts.push(addr),
-				Err(e) => eprintln!("{e}")
-			};
-		}
-		
 		/* Construct builder instance */
 		Ok(Self {
 			hosts: hosts.into_iter().peekable(),
 			ports: options.ports.peekable(),
 			scans: options.scans.peekable(),
-			source_addr: match device.ips.first().unwrap().ip() {
-				IpAddr::V4(addr) => addr,
-				_ => return Err(eyre::ErrReport::msg("no ipv4"))
-			},
+			source_addr,
 			source_port: rand::thread_rng().gen_range(1025..=u16::MAX),
 			tcp_seq: rand::random()
 		})
@@ -85,7 +95,7 @@ impl ProbeBuilder {
 }
 
 impl Iterator for ProbeBuilder {
-	type Item = Result<[u8; 40]>;
+	type Item = [u8; 40];
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let scan;
@@ -149,7 +159,7 @@ impl Iterator for ProbeBuilder {
 		ip.set_payload(next_protocol_header);
 		ip.set_checksum(checksum(&ip.to_immutable()));
 
-		Some(Ok(*packet))
+		Some(*packet)
 	}
 }
 
@@ -166,7 +176,10 @@ fn probe_builder_scans_iter() {}
 fn probe_builder_file_error() {}
 
 #[test]
-fn probe_builder_ip_error() {}
+fn probe_builder_ip_format_error() {}
+
+#[test]
+fn probe_builder_no_ip() {}
 
 #[test]
 fn probe_builder_network_interface_error() {
