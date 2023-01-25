@@ -14,3 +14,6 @@ dns-lookup = "1.0.8"
 pnet = { version = "0.31.0", features = ["std"] }
 rand = "0.8.5"
 socket = "0.0.7"
+
+[dev-dependencies]
+assert_fs = "1.0.10"
