@@ -6,6 +6,11 @@ pub mod scans;
 pub use ports::Range as PortRange;
 pub use scans::Scan as ScanType;
 
+/*
+** Structure to hold arguments for scanning
+** implements Iterator trait
+** loops back to the beginning after returning None
+*/
 #[derive(Clone, Debug)]
 pub struct ArgIterator<T: Display> {
 	inner: Vec<T>,

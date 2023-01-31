@@ -34,7 +34,7 @@ impl Iterator for Range {
 				Some(port)
 			},
 			None => {
-				self.next = Some(self.start);
+				self.next = Some(self.start); // loops back
 				None
 			}
 		}
@@ -62,7 +62,7 @@ impl Iterator for ArgIterator<Range> {
 		if self.next < self.inner.len() {
 			let range = &mut self.inner[self.next];
 
-			match range.next() {
+			match range.next() { // iterate deeply into ranges
 				Some(port) => Some(port),
 				None => {
 					self.next += 1;
@@ -70,7 +70,7 @@ impl Iterator for ArgIterator<Range> {
 				}
 			}
 		} else {
-			self.next = 0;
+			self.next = 0; // loops back
 			None
 		}
 	}
@@ -95,24 +95,24 @@ impl Parser {
 		let mut result: Vec<Range> = vec![];
 
 		array.inner.sort();
-		for pair in array.inner.windows(2) {
+		for pair in array.inner.windows(2) { // iterate over pairs of consecutive ranges
 			if let Some(ref mut tmp) = last {
-				if tmp.end >= pair[1].start {
-					if tmp.end < pair[1].end {
-						tmp.end = pair[1].end;
+				if tmp.end >= pair[1].start { 
+					if tmp.end < pair[1].end { // temporary range still overlaps with next one
+						tmp.end = pair[1].end; // therefore extend it
 					}
-				} else {
-					result.push(*tmp);
+				} else { // no more overlaps
+					result.push(*tmp); // save temp range
 					last = None;
 				}			
 			} else {
-				if pair[0].end >= pair[1].start {
-					if pair[0].end >= pair[1].end {
+				if pair[0].end >= pair[1].start { // overlapping ranges
+					if pair[0].end >= pair[1].end { // create a temporary range that contains both
 						last = Some(Range::new(pair[0].start, pair[0].end));
 					} else {
 						last = Some(Range::new(pair[0].start, pair[1].end));
 					}
-				} else {
+				} else { // no overlaps, do nothing
 					result.push(pair[0]);
 				}
 			}
@@ -125,7 +125,7 @@ impl Parser {
 		}
 
 		if result.iter().fold(0, |acc, r| acc + (r.end - r.start) + 1) > 1024 {
-			return Err(Self::RangeTooBig(cmd));
+			return Err(Self::RangeTooBig(cmd)); // cannot scan more than 1024 ports at once
 		}
 
 		array.inner = std::mem::take(&mut result);
@@ -146,8 +146,8 @@ impl clap::builder::TypedValueParser for Parser {
 		let str = inner.parse_ref(cmd, arg, raw_value)?;
 
 		let mut ports = ArgIterator::<Range>::new();
-		for range in str.split(',') {
-			let values: Vec<&str> = range.splitn(2, '-').collect();
+		for range in str.split(',') { // ',' separates ranges
+			let values: Vec<&str> = range.splitn(2, '-').collect(); // '-' separates range bounds
 			let mut r: [u16; 2] = [0, 0];
 
 			for i in 0..values.len() {
@@ -170,6 +170,6 @@ impl clap::builder::TypedValueParser for Parser {
 			}
 		}
 
-		Self::validate(ports, cmd)
+		Self::validate(ports, cmd) // merge overlaps, inverse reversed ranges, etc.
 	}
 }

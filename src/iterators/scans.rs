@@ -81,7 +81,7 @@ impl Iterator for ArgIterator<Scan> {
 			self.next += 1;
 		} else {
 			value = None;
-			self.next = 0;
+			self.next = 0; // loops back
 		}
 
 		value
@@ -111,7 +111,7 @@ impl clap::builder::TypedValueParser for Parser {
 		let str = inner.parse_ref(cmd, arg, raw_value)?;
 
 		let mut scans = ArgIterator::<Scan>::new();
-		for scan_name in str.split(',') {
+		for scan_name in str.split(',') { // ',' separates scan names
 			let scantype = Scan::try_from(scan_name.trim().to_uppercase());
 			if let Ok(scantype) = scantype {
 				scans.inner.push(scantype);
@@ -121,7 +121,7 @@ impl clap::builder::TypedValueParser for Parser {
 		}
 
 		scans.inner.sort();
-		scans.inner.dedup();
+		scans.inner.dedup(); // remove duplicate scan types
 		Ok(scans)
 	}
 }
