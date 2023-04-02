@@ -11,7 +11,7 @@ anyhow = "1.0.68"
 clap = { version = "4.0.32", features = ["derive", "cargo"] }
 colored = "2.0.0"
 dns-lookup = "1.0.8"
-pnet = { version = "0.31.0", features = ["std"] }
+pnet = "0.33.0"
 rand = "0.8.5"
 socket = "0.0.7"
 

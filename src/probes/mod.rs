@@ -37,7 +37,7 @@ pub struct ProbeBuilder {
 }
 
 impl ProbeBuilder {
-	pub fn new(mut options: cli::Args) -> Result<Self> {
+	pub fn new(mut options: cli::Args, source: Ipv4Addr) -> Result<Self> {
 		/* Load ip addresses from file */
 		if let Some(path) = &options.ip_file {
 			let file = std::fs::File::open(path.trim()).with_context(|| format!("Cannot read \"{}\"", path))?;
@@ -68,27 +68,15 @@ impl ProbeBuilder {
 		if hosts.len() == 0 {
 			return Err(anyhow!("No valid target to scan"));
 		}
-		// remove duplicates ????
-
-		/* Find source IP address (needed to compute checksums) */
-		let interfaces = pnet::datalink::interfaces();
-		let device = match interfaces.iter()
-			.find(|i| i.is_up() && !i.is_loopback() && !i.ips.is_empty()) {
-				Some(dev) => dev,
-				None => return Err(anyhow!("No source address found"))
-		};
-		
-		let source_addr = match device.ips.iter().filter(|ip| ip.is_ipv4()).map(|ipnet| ipnet.ip()).next() {
-			Some(IpAddr::V4(ip)) => ip,
-			_ => return Err(anyhow!("No IPv4 source address found"))
-		};
+		hosts.sort();
+		hosts.dedup();
 
 		/* Construct builder instance */
 		Ok(Self {
 			hosts: hosts.into_iter().peekable(),
 			ports: options.ports.peekable(),
 			scans: options.scans.peekable(),
-			source_addr,
+			source_addr: source,
 			source_port: rand::thread_rng().gen_range(1025..=u16::MAX),
 			tcp_seq: rand::random()
 		})
@@ -204,7 +192,7 @@ fn probe_builder_hosts_iter() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn probe_builder_ports_iter() -> Result<(), Box<dyn std::error::Error>> {
 	let arguments = vec![clap::crate_name!(), "-i dns.google", "-s SYN", "-p80,443,1024-1026"];
-	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap())?;
+	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into())?;
 	let probes: Vec<_> = builder.collect();
 	
 	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[0]).unwrap().payload()).unwrap().get_destination(), 80);
@@ -219,7 +207,7 @@ fn probe_builder_ports_iter() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn probe_builder_scans_iter() -> Result<(), Box<dyn std::error::Error>> {
 	let arguments = vec![clap::crate_name!(), "-i 127.0.0.1", "-p80"];
-	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap())?;
+	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into())?;
 	let probes: Vec<_> = builder.collect();
 	
 	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[0]).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::SYN).unwrap());
@@ -236,7 +224,7 @@ fn probe_builder_scans_iter() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn probe_builder_file_error() -> Result<(), Box<dyn std::error::Error>> {
 	let arguments = vec![clap::crate_name!(), "-f non_existing_file.txt"];
-	if let Ok(_) = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap()) {
+	if let Ok(_) = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into()) {
 		assert!(false, "must complain about file existence");
 	}
 	
@@ -253,7 +241,7 @@ fn probe_builder_no_ip() -> Result<(), Box<dyn std::error::Error>> {
 	let hosts = format!("-f {}", tmp.path().to_str().unwrap());
 	let arguments = vec![clap::crate_name!(), "-i foobar", hosts.as_str()];
 	
-	if let Ok(_) = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap()) {
+	if let Ok(_) = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into()) {
 		assert!(false, "must complain about not having addresses to scan");
 	}
 	
