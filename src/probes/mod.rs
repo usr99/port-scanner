@@ -1,7 +1,6 @@
 use std::io::{BufRead, BufReader};
 use std::iter::Peekable;
-// use std::time;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::vec::IntoIter;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::{MutableIpv4Packet, checksum};
@@ -81,14 +80,10 @@ impl ProbeBuilder {
 			tcp_seq: rand::random()
 		})
 	}
-
-	pub fn destination(&mut self) -> (Ipv4Addr, u16) {
-		(*self.hosts.peek().unwrap(), *self.ports.peek().unwrap())
-	}
 }
 
 impl Iterator for ProbeBuilder {
-	type Item = [u8; 40];
+	type Item = ([u8; 40], SocketAddr);
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let scan;
@@ -153,7 +148,7 @@ impl Iterator for ProbeBuilder {
 		};
 		ip.set_checksum(checksum(&ip.to_immutable()));
 
-		Some(*packet)
+		Some((*packet, SocketAddr::new(IpAddr::V4(host), port)))
 	}
 }
 
@@ -174,17 +169,18 @@ fn probe_builder_hosts_iter() -> Result<(), Box<dyn std::error::Error>> {
 	
 	let hosts = format!("-f {}", tmp.path().to_str().unwrap());
 	let arguments = vec![clap::crate_name!(), "-i dns.google", "-s SYN", "-p80", hosts.as_str()];
-	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap())?;
+	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into())?;
 	let probes: Vec<_> = builder.collect();
 	
-	let google_dns = Ipv4Packet::new(&probes[0]).unwrap().get_destination();
+	let google_dns = Ipv4Packet::new(&probes[0].0).unwrap().get_destination();
 	if google_dns != Ipv4Addr::new(8, 8, 8, 8) && google_dns != Ipv4Addr::new(8, 8, 4, 4){
 		assert!(false, "dns.google should resolve to 8.8.8.8 or 8.8.4.4");
 	}
 	
-	assert_eq!(Ipv4Packet::new(&probes[1]).unwrap().get_destination(), Ipv4Addr::new(127, 0, 0, 1));
-	assert_eq!(Ipv4Packet::new(&probes[2]).unwrap().get_destination(), Ipv4Addr::new(192, 168, 1, 22));
-	assert_eq!(Ipv4Packet::new(&probes[3]).unwrap().get_destination(), Ipv4Addr::new(10, 13, 250, 188));
+	// Host addresses were sorted when parsing IP file
+	assert_eq!(Ipv4Packet::new(&probes[1].0).unwrap().get_destination(), Ipv4Addr::new(10, 13, 250, 188));
+	assert_eq!(Ipv4Packet::new(&probes[2].0).unwrap().get_destination(), Ipv4Addr::new(127, 0, 0, 1));
+	assert_eq!(Ipv4Packet::new(&probes[3].0).unwrap().get_destination(), Ipv4Addr::new(192, 168, 1, 22));
 	Ok(())
 }
 
@@ -195,11 +191,11 @@ fn probe_builder_ports_iter() -> Result<(), Box<dyn std::error::Error>> {
 	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into())?;
 	let probes: Vec<_> = builder.collect();
 	
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[0]).unwrap().payload()).unwrap().get_destination(), 80);
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[1]).unwrap().payload()).unwrap().get_destination(), 443);
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[2]).unwrap().payload()).unwrap().get_destination(), 1024);
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[3]).unwrap().payload()).unwrap().get_destination(), 1025);
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[4]).unwrap().payload()).unwrap().get_destination(), 1026);
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[0].0).unwrap().payload()).unwrap().get_destination(), 80);
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[1].0).unwrap().payload()).unwrap().get_destination(), 443);
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[2].0).unwrap().payload()).unwrap().get_destination(), 1024);
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[3].0).unwrap().payload()).unwrap().get_destination(), 1025);
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[4].0).unwrap().payload()).unwrap().get_destination(), 1026);
 	Ok(())
 }
 
@@ -210,12 +206,12 @@ fn probe_builder_scans_iter() -> Result<(), Box<dyn std::error::Error>> {
 	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into())?;
 	let probes: Vec<_> = builder.collect();
 	
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[0]).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::SYN).unwrap());
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[1]).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::NULL).unwrap());
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[2]).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::ACK).unwrap());
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[3]).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::FIN).unwrap());
-	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[4]).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::XMAS).unwrap());
-	assert_eq!(Ipv4Packet::new(&probes[5]).unwrap().get_next_level_protocol(), IpNextHeaderProtocols::Udp);
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[0].0).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::SYN).unwrap());
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[1].0).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::NULL).unwrap());
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[2].0).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::ACK).unwrap());
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[3].0).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::FIN).unwrap());
+	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[4].0).unwrap().payload()).unwrap().get_flags(), u16::try_from(ScanType::XMAS).unwrap());
+	assert_eq!(Ipv4Packet::new(&probes[5].0).unwrap().get_next_level_protocol(), IpNextHeaderProtocols::Udp);
 	
 	Ok(())	
 }
