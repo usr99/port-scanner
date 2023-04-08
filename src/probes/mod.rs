@@ -9,22 +9,11 @@ use pnet::packet::udp::{MutableUdpPacket, ipv4_checksum as udp_checksum};
 use anyhow::{Result, Context, anyhow};
 use rand::Rng;
 
+mod report;
+
 use crate::cli;
 use crate::iterators::{ArgIterator, PortRange, ScanType};
 
-// enum ProbeStatus {
-// 	Waiting(time::Instant),
-// 	Open,
-// 	Closed,
-// 	Filtered,
-// 	Timeout
-// }
-
-/*
-** ProbeReport
-	** implemented as HashMap<String, HashMap<u16, ProbeStatus>>
-	** might be encapsulated in a struct for easier access
-*/
 #[derive(Debug)]
 pub struct ProbeBuilder {
 	hosts: Peekable<IntoIter<Ipv4Addr>>,
@@ -129,7 +118,7 @@ impl Iterator for ProbeBuilder {
 		let next_protocol_header = &mut [0u8; 20];
 		match scan {
 			ScanType::UDP => {
-				let mut udp = MutableUdpPacket::new(next_protocol_header).unwrap();
+				let mut udp = MutableUdpPacket::new(&mut next_protocol_header[0..8]).unwrap();
 				udp.set_source(self.source_port);
 				udp.set_destination(port);
 				udp.set_length(8);
