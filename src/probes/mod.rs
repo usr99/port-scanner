@@ -9,7 +9,7 @@ use pnet::packet::udp::{MutableUdpPacket, ipv4_checksum as udp_checksum};
 use anyhow::{Result, Context, anyhow};
 use rand::Rng;
 
-mod report;
+pub mod response;
 
 use crate::cli;
 use crate::iterators::{ArgIterator, PortRange, ScanType};
