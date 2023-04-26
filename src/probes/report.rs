@@ -16,7 +16,6 @@ use super::response::{Response, ResponseKind};
 #[derive(IntoPrimitive, PartialEq, PartialOrd)]
 #[repr(u8)]
 enum PortStatus {
-	Unknown,
 	Filtered,
 	Unfiltered,
 	Closed,
@@ -35,90 +34,92 @@ const ACCEPTED_ICMP_CODES: [IcmpCode; 6] = [
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
-impl From<(ResponseKind, ScanType)> for PortStatus {
-	fn from(value: (ResponseKind, ScanType)) -> Self {
+impl TryFrom<(ResponseKind, ScanType)> for PortStatus {
+	type Error = ();
+	
+	fn try_from(value: (ResponseKind, ScanType)) -> Result<Self, Self::Error> {
 		match value.1 {
 			ScanType::SYN => {
 				match value.0 {
 					ResponseKind::Tcp(flags) => {
 						if flags & TcpFlags::RST != 0 {
-							PortStatus::Closed
+							Ok(Self::Closed)
 						} else if flags & TcpFlags::SYN != 0 && flags & TcpFlags::SYN != 0 {
-							PortStatus::Open
+							Ok(Self::Open)
 						} else {
-							PortStatus::Unknown
+							Err(())
 						}
 					},
 					ResponseKind::Icmp(IcmpTypes::DestinationUnreachable, code) => {
 						if ACCEPTED_ICMP_CODES.contains(&code) {
-							PortStatus::Filtered
+							Ok(Self::Filtered)
 						} else {
-							PortStatus::Unknown
+							Err(())
 						}
 					},
-					ResponseKind::NoResponse => PortStatus::Filtered,
-					_ => PortStatus::Unknown
+					ResponseKind::NoResponse => Ok(Self::Filtered),
+					_ => Err(())
 				}
 			},
 			ScanType::ACK => {
 				match value.0 {
 					ResponseKind::Tcp(flags) => {
 						if flags & TcpFlags::RST != 0 {
-							PortStatus::Unfiltered
+							Ok(Self::Unfiltered)
 						} else {
-							PortStatus::Unknown
+							Err(())
 						}
 					},
 					ResponseKind::Icmp(IcmpTypes::DestinationUnreachable, code) => {
 						if ACCEPTED_ICMP_CODES.contains(&code) {
-							PortStatus::Filtered
+							Ok(Self::Filtered)
 						} else {
-							PortStatus::Unknown
+							Err(())
 						}
 					}
-					ResponseKind::NoResponse => PortStatus::Filtered,
-					_ => PortStatus::Unknown
+					ResponseKind::NoResponse => Ok(Self::Filtered),
+					_ => Err(())
 				}
 			},
 			ScanType::UDP => {
 				match value.0 {
-					ResponseKind::Udp => PortStatus::Open,
+					ResponseKind::Udp => Ok(Self::Open),
 					ResponseKind::Icmp(IcmpTypes::DestinationUnreachable, code) => {
 						if ACCEPTED_ICMP_CODES.contains(&code) {
 							match code {
-								IcmpCodes::DestinationPortUnreachable => PortStatus::Closed,
-								_ => PortStatus::Filtered
+								IcmpCodes::DestinationPortUnreachable => Ok(Self::Closed),
+								_ => Ok(Self::Filtered)
 							}
 						} else {
-							PortStatus::Unknown
+							Err(())
 						}
 					},
-					ResponseKind::NoResponse => PortStatus::OpenOrFiltered,
-					_ => PortStatus::Unknown
+					ResponseKind::NoResponse => Ok(Self::OpenOrFiltered),
+					_ => Err(())
 				}
 			},
 			_ => { // NULL, FIN or XMAS
 				match value.0 {
 					ResponseKind::Tcp(flags) => {
 						if flags & TcpFlags::RST != 0 {
-							PortStatus::Closed
+							Ok(Self::Closed)
 						} else {
-							PortStatus::Unknown
+							Err(())
 						}
 					},
 					ResponseKind::Icmp(IcmpTypes::DestinationUnreachable, code) => {
 						if ACCEPTED_ICMP_CODES.contains(&code) {
-							PortStatus::Filtered
+							Ok(Self::Filtered)
 						} else {
-							PortStatus::Unknown
+							Err(())
 						}
 					},
-					ResponseKind::NoResponse => PortStatus::OpenOrFiltered,
-					_ => PortStatus::Unknown
+					ResponseKind::NoResponse => Ok(Self::OpenOrFiltered),
+					_ => Err(())
 				}
 			}
 		}
-	}
+	}		
 }
 
 impl Display for PortStatus {
@@ -128,8 +129,7 @@ impl Display for PortStatus {
 			PortStatus::OpenOrFiltered => "open | filtered",
 			PortStatus::Closed => "closed",
 			PortStatus::Unfiltered => "unfiltered",
-			PortStatus::Filtered => "filtered",
-			PortStatus::Unknown => "unknown"
+			PortStatus::Filtered => "filtered"
 		})
 	}
 }
@@ -160,8 +160,10 @@ impl Scanner {
 				report.probes.insert(packet.source_port, (ProbeStatus::Waiting(Instant::now()), packet.scan));
 			},
 			None => {
+				// Default status is "Filtered" because
+				// it has the least priority so it will be overwritten by any other value
 				let mut report = Report {
-					status: PortStatus::Unknown,
+					status: PortStatus::Filtered,
 					probes: HashMap::new()
 				};
 				report.probes.insert(packet.source_port, (ProbeStatus::Waiting(Instant::now()), packet.scan));
@@ -186,15 +188,14 @@ impl Scanner {
 			Some(p) => p,
 			None => return
 		};
-
-		let scan = probe.1;
-		let status = PortStatus::from((response.kind, scan));
 		
 		// If the response does not give any information
 		// about the port status, we keep waiting for new responses
-		if let PortStatus::Unknown = status {
-			return ;
-		}
+		let scan = probe.1;
+		let status = match PortStatus::try_from((response.kind, scan)) {
+			Ok(st) => st,
+			Err(_) => return
+		};
 		probe.0 = ProbeStatus::Done;
 
 		// Port status can be represented as u8
@@ -212,9 +213,8 @@ impl Scanner {
 				if let ProbeStatus::Waiting(time) = probe.0 {
 					if time.elapsed() > DEFAULT_TIMEOUT {
 						// all timedout probes should be updated as ResponseKind::NoResponse ===================================================================
-						// implement tryfrom instead of from for PortStatus
 						probe.0 = ProbeStatus::TimedOut;
-						let status = PortStatus::from((ResponseKind::NoResponse, probe.1));
+						let status = PortStatus::try_from((ResponseKind::NoResponse, probe.1)).unwrap();
 						if report.status < status {
 							report.status = status;
 						}
