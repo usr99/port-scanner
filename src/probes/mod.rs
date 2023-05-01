@@ -6,7 +6,7 @@ use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::{MutableIpv4Packet, checksum};
 use pnet::packet::tcp::{MutableTcpPacket, ipv4_checksum as tcp_checksum};
 use pnet::packet::udp::{MutableUdpPacket, ipv4_checksum as udp_checksum};
-use anyhow::{Result, Context, anyhow};
+use anyhow::{Result, anyhow};
 use rand::Rng;
 
 pub mod report;
@@ -26,36 +26,42 @@ pub struct ProbeBuilder {
 }
 
 impl ProbeBuilder {
-	pub fn new(mut options: cli::Args, source: Ipv4Addr) -> Result<Self> {
-		/* Load ip addresses from file */
-		if let Some(path) = &options.ip_file {
-			let file = std::fs::File::open(path.trim()).with_context(|| format!("Cannot read \"{}\"", path))?;
-			let buffer = BufReader::new(file);
+	pub fn new(options: cli::Args, source: Ipv4Addr) -> Result<Self> {
+		let mut hosts: Vec<Ipv4Addr> = vec![];
 
-			for line in buffer.lines() {
-				let line = line?;
-				if line.len() > 0 {
-					options.ip.push(line);
+		for str in options.ip.into_iter() {
+			if let Ok(ipv4) = resolve_ipv4_address(&str) {
+				hosts.push(ipv4);
+				continue ;
 				}
+				
+			let file = match std::fs::File::open(str.trim()) {
+				Ok(f) => f,
+				Err(e) => {
+					eprintln!("warning: {str}: {e}");
+					continue ;
+			}
+			};
+
+			let buffer = BufReader::new(file);
+			for line in buffer.lines() {
+				let line = match line {
+					Ok(l) => l,
+					Err(e) => {
+						eprintln!("warning: ignoring {str}: {e}");
+						continue ;
+		}
+				};
+
+				match resolve_ipv4_address(&line) {
+					Ok(ipv4) => hosts.push(ipv4),
+					Err(e) => eprintln!("warning: {e}, ignored")
+			};
 			}
 		}
 
-		/* Turn string representation into actual IPv4 addresses */
-		let mut hosts: Vec<Ipv4Addr> = vec![];
-		for addr in options.ip.into_iter() {
-			match dns_lookup::lookup_host(addr.trim()) {
-				Ok(array) => {
-					match array.iter().filter(|addr| addr.is_ipv4()).next() {
-						Some(IpAddr::V4(ip)) => hosts.push(*ip),
-						_ => eprintln!("\"{addr}\": failed to resolve hostname")
-					}
-				},
-				Err(e) => eprintln!("\"{addr}\": {e}")
-			};
-		}
-
 		if hosts.len() == 0 {
-			return Err(anyhow!("No valid target to scan"));
+			return Err(anyhow!("no valid target to scan"));
 		}
 		hosts.sort();
 		hosts.dedup();
@@ -70,6 +76,20 @@ impl ProbeBuilder {
 			tcp_seq: rand::random()
 		})
 	}
+}
+
+fn resolve_ipv4_address(addr: &str) -> Result<Ipv4Addr> {
+	if let Ok(ipv4) = addr.parse::<Ipv4Addr>() {
+		return Ok(ipv4);
+	}
+
+	if let Ok(ips) = dns_lookup::lookup_host(addr.trim()) {
+		if let Some(IpAddr::V4(ipv4)) = ips.iter().filter(|ip| ip.is_ipv4()).next() {
+			return Ok(*ipv4);
+		}
+	}
+
+	Err(anyhow!("\"{addr}\" does not represent any valid IPv4 address"))
 }
 
 pub struct Probe {
@@ -169,7 +189,7 @@ fn probe_builder_hosts_iter() -> Result<(), Box<dyn std::error::Error>> {
 	let tmp = assert_fs::NamedTempFile::new("ip.tmp")?;
 	tmp.write_str(CONTENT)?;
 	
-	let hosts = format!("-f {}", tmp.path().to_str().unwrap());
+	let hosts = format!("-i {}", tmp.path().to_str().unwrap());
 	let arguments = vec![clap::crate_name!(), "-i dns.google", "-s SYN", "-p80", hosts.as_str()];
 	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into())?;
 	let probes: Vec<_> = builder.collect();
@@ -221,7 +241,7 @@ fn probe_builder_scans_iter() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn probe_builder_file_error() -> Result<(), Box<dyn std::error::Error>> {
-	let arguments = vec![clap::crate_name!(), "-f non_existing_file.txt"];
+	let arguments = vec![clap::crate_name!(), "-i non_existing_file.txt"];
 	if let Ok(_) = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into()) {
 		assert!(false, "must complain about file existence");
 	}
@@ -236,7 +256,7 @@ fn probe_builder_no_ip() -> Result<(), Box<dyn std::error::Error>> {
 	let tmp = assert_fs::NamedTempFile::new("ip.tmp")?;
 	tmp.write_str(CONTENT)?;
 	
-	let hosts = format!("-f {}", tmp.path().to_str().unwrap());
+	let hosts = format!("-i {}", tmp.path().to_str().unwrap());
 	let arguments = vec![clap::crate_name!(), "-i foobar", hosts.as_str()];
 	
 	if let Ok(_) = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into()) {

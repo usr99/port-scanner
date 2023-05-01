@@ -8,8 +8,7 @@ use crate::iterators::{ports, scans};
 #[clap(author, version, about)]
 #[command(arg_required_else_help(true))]
 pub struct Args {
-
-	/// Ip address to scan
+	/// Addresses to scan or path to a file containing those addresses (can be hostnames too)
 	#[arg(short, long)]
 	pub ip: Vec<String>,
 
@@ -20,10 +19,6 @@ pub struct Args {
 	/// Scan types
 	#[arg(short, long, default_value_t = ArgIterator::<ScanType>::default(), value_parser = scans::Parser)]
 	pub scans: ArgIterator<ScanType>,
-
-	/// File that contains ip addresses to scan
-	#[arg(short = 'f', long = "file")]
-	pub ip_file: Option<String>,
 
 	/// Number of scans to run concurrently
 	#[arg(short, long, default_value_t = 1)]
