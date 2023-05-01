@@ -32,11 +32,11 @@ impl TryFrom<Scan> for u16 {
 	}
 }
 
-impl TryFrom<String> for Scan {
+impl TryFrom<&str> for Scan {
 	type Error = ();
 
-	fn try_from(str: String) -> Result<Self, <Self as TryFrom<String>>::Error> {
-		match str.as_str() {
+	fn try_from(str: &str) -> Result<Self, <Self as TryFrom<&str>>::Error> {
+		match str {
 			"SYN"	=> Ok(Self::SYN),
 			"NULL"	=> Ok(Self::NULL),
 			"ACK"	=> Ok(Self::ACK),
@@ -63,9 +63,9 @@ impl Default for ArgIterator<Scan> {
 impl std::fmt::Display for ArgIterator<Scan> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		self.inner.iter().fold(Ok(()), |result, scan| {
-			result.and_then(|_| write!(f, "{}{}", scan, match scan {
-				Scan::UDP => "",
-				_ => ",",
+			result.and_then(|_| write!(f, "{}{}", scan, match scan != self.inner.last().unwrap() {
+				true => ",",
+				false => ""
 			}))
 		})
 	}
@@ -112,11 +112,16 @@ impl clap::builder::TypedValueParser for Parser {
 
 		let mut scans = ArgIterator::<Scan>::new();
 		for scan_name in str.split(',') { // ',' separates scan names
-			let scantype = Scan::try_from(scan_name.trim().to_uppercase());
+			let scan_name = scan_name.trim().to_uppercase();
+			if scan_name.is_empty() {
+				continue ;
+			}
+
+			let scantype = Scan::try_from(scan_name.as_str());
 			if let Ok(scantype) = scantype {
 				scans.inner.push(scantype);
 			} else {
-				return Err(Self::InvalidValue(scan_name, cmd));
+				return Err(Self::InvalidValue(&scan_name, cmd));
 			}
 		}
 
