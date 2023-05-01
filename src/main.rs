@@ -1,12 +1,12 @@
 use clap::Parser;
-use anyhow::{Result, Context, anyhow};
+use anyhow::{Result, anyhow};
 use mio::{Poll, Events, Token, unix::SourceFd, Interest};
 use std::{
 	time::{Instant, Duration},
 	net::{Ipv4Addr, IpAddr}
 };
 use pnet::datalink::{self, NetworkInterface};
-use socket::{Socket, SOCK_RAW, htons};
+use socket::{Socket, SOCK_RAW, SOCK_DGRAM, htons};
 use libc::{AF_PACKET, ETH_P_ALL, AF_INET, IPPROTO_RAW};
 
 use port_scanner::{cli, probes::{self, report::Scanner}};
@@ -15,12 +15,8 @@ const DELAY: Duration = Duration::from_millis(250);
 
 fn main() -> Result<()> {
 	let args = cli::Args::parse();
-
-	let (iface, source) = lookup_interfaces()?;
-	println!("Capturing on {}:{}", iface.name, source);
-
-	let mut probes = probes::ProbeBuilder::new(args, source)
-		.with_context(|| "Failed to initialize scan parameters")?;
+	let (_, source) = lookup_interfaces()?;
+	let mut probes = probes::ProbeBuilder::new(args, source)?;
 
 	// We create two sockets, one for sending and one for receiving
 	// tx is AF_INET because no one wants to fill MAC addresses by hand
@@ -29,7 +25,7 @@ fn main() -> Result<()> {
 	// this means we will receive more packets though
 	const SOCKET: Token = Token(0);
 	let tx = Socket::new(AF_INET, SOCK_RAW, IPPROTO_RAW)?;
-	let rx = Socket::new(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL as u16).into())?;
+	let rx = Socket::new(AF_PACKET, SOCK_DGRAM, htons(ETH_P_ALL as u16).into())?;
 	let buffer = &mut [0u8; 8192];
 
 	let mut poll = Poll::new()?;
@@ -80,7 +76,7 @@ fn main() -> Result<()> {
 				let packet = &buffer[..bytes];
 				scanner.update(packet);
 			}
-		}	
+		}
 	}
 
 	scanner.print();

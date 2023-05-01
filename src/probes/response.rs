@@ -8,8 +8,8 @@ use pnet::packet::{
 	icmp::{IcmpType, IcmpCode, IcmpPacket},
 	ipv4::Ipv4Packet,
 	ip::IpNextHeaderProtocols,
-	tcp::{TcpPacket, TcpFlags},
-	udp::UdpPacket, ethernet::EthernetPacket
+	tcp::TcpPacket,
+	udp::UdpPacket
 };
 
 #[derive(Debug)]
@@ -85,19 +85,7 @@ impl TryFrom<&[u8]> for Response {
 	fn try_from(buffer: &[u8]) -> Result<Self, <Self as TryFrom<&[u8]>>::Error> {
 		let time = Instant::now();
 
-		let eth = EthernetPacket::new(buffer).ok_or(anyhow!("Packet too small."))?;
-		let ip = Ipv4Packet::new(eth.payload()).ok_or(anyhow!("Packet too small."))?;
-
-		// let tcp = TcpPacket::new(ip.payload()).ok_or(anyhow!("Packet too small."))?;
-		// println!("{}:{} -> {}:{} {}",
-			// ip.get_source(), tcp.get_source(),
-			// ip.get_destination(), tcp.get_destination(),
-			// match tcp.get_flags() {
-				// TcpFlags::SYN => "SYN",
-				// TcpFlags::RST => "RST",
-				// _ => "SYN, ACK"
-			// });
-
+		let ip = Ipv4Packet::new(buffer).ok_or(anyhow!("Packet too small."))?;
 		let info = fetch_next_header_info(&ip)?;
 
 		Ok(Response {
