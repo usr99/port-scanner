@@ -1,7 +1,6 @@
 use std::io::{BufRead, BufReader};
 use std::iter::Peekable;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::vec::IntoIter;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::{MutableIpv4Packet, checksum};
 use pnet::packet::tcp::{MutableTcpPacket, ipv4_checksum as tcp_checksum};
@@ -17,9 +16,9 @@ use crate::iterators::{ArgIterator, PortRange, ScanType};
 
 #[derive(Debug)]
 pub struct ProbeBuilder {
-	hosts: Peekable<IntoIter<Ipv4Addr>>,
-	ports: Peekable<ArgIterator<PortRange>>,
+	hosts: Peekable<ArgIterator<Ipv4Addr>>,
 	scans: Peekable<ArgIterator<ScanType>>,
+	ports: Peekable<ArgIterator<PortRange>>,
 	source_addr: Ipv4Addr,
 	source_port: u16,
 	tcp_seq: u32
@@ -33,14 +32,14 @@ impl ProbeBuilder {
 			if let Ok(ipv4) = resolve_ipv4_address(&str) {
 				hosts.push(ipv4);
 				continue ;
-				}
+			}
 				
 			let file = match std::fs::File::open(str.trim()) {
 				Ok(f) => f,
 				Err(e) => {
 					eprintln!("warning: {str}: {e}");
 					continue ;
-			}
+				}
 			};
 
 			let buffer = BufReader::new(file);
@@ -50,13 +49,13 @@ impl ProbeBuilder {
 					Err(e) => {
 						eprintln!("warning: ignoring {str}: {e}");
 						continue ;
-		}
+					}
 				};
 
 				match resolve_ipv4_address(&line) {
 					Ok(ipv4) => hosts.push(ipv4),
 					Err(e) => eprintln!("warning: {e}, ignored")
-			};
+				};
 			}
 		}
 
@@ -66,9 +65,8 @@ impl ProbeBuilder {
 		hosts.sort();
 		hosts.dedup();
 
-		/* Construct builder instance */
 		Ok(Self {
-			hosts: hosts.into_iter().peekable(),
+			hosts: ArgIterator::from(hosts).peekable(),
 			ports: options.ports.peekable(),
 			scans: options.scans.peekable(),
 			source_addr: source,
@@ -106,27 +104,32 @@ impl Iterator for ProbeBuilder {
 		let scan;
 		let port;
 		let host;
-		if let Some(s) = self.scans.next() {
-			scan = s;
+
+		if let Some(h) = self.hosts.next() {
+			host = h;
+			scan = *self.scans.peek().unwrap();
 			port = *self.ports.peek().unwrap();
-			host = *self.hosts.peek().unwrap();
 		} else {
-			scan = self.scans.next().unwrap();
-			self.ports.next();
-			if let Some(p) = self.ports.peek() {
-				port = *p;
-				host = *self.hosts.peek().unwrap();
-			} else {
-				self.ports.next();
+			host = self.hosts.next().unwrap();
+			self.scans.next();
+
+			if let Some(s) = self.scans.peek() {
+				scan = *s;
 				port = *self.ports.peek().unwrap();
-				self.hosts.next();
-				if let Some(h) = self.hosts.peek() {
-					host = *h;
+			} else {
+				self.scans.next();
+				scan = *self.scans.peek().unwrap();
+
+				self.ports.next();
+				if let Some(p) = self.ports.peek() {
+					port = *p;
 				} else {
 					return None;
 				}
 			}
 		}
+
+		println!("host: {host}, scan: {scan}, port: {port}");
 
 		let packet = &mut [0u8; 40];
 		let mut ip = MutableIpv4Packet::new(packet).unwrap();
@@ -181,7 +184,7 @@ use clap::Parser;
 #[cfg(test)]
 use pnet::packet::Packet;
 #[cfg(test)]
-use pnet::packet::{ipv4::Ipv4Packet, tcp::TcpPacket};
+use pnet::packet::{ipv4::Ipv4Packet, tcp::TcpPacket, udp::UdpPacket};
 
 #[test]
 fn probe_builder_hosts_iter() -> Result<(), Box<dyn std::error::Error>> {
@@ -206,7 +209,6 @@ fn probe_builder_hosts_iter() -> Result<(), Box<dyn std::error::Error>> {
 	Ok(())
 }
 
-
 #[test]
 fn probe_builder_ports_iter() -> Result<(), Box<dyn std::error::Error>> {
 	let arguments = vec![clap::crate_name!(), "-i dns.google", "-s SYN", "-p80,443,1024-1026"];
@@ -220,7 +222,6 @@ fn probe_builder_ports_iter() -> Result<(), Box<dyn std::error::Error>> {
 	assert_eq!(TcpPacket::new(Ipv4Packet::new(&probes[4].data).unwrap().payload()).unwrap().get_destination(), 1026);
 	Ok(())
 }
-
 
 #[test]
 fn probe_builder_scans_iter() -> Result<(), Box<dyn std::error::Error>> {
@@ -238,6 +239,42 @@ fn probe_builder_scans_iter() -> Result<(), Box<dyn std::error::Error>> {
 	Ok(())	
 }
 
+#[test]
+fn probe_builder_complex_iter() -> Result<(), Box<dyn std::error::Error>> {
+	let arguments = vec![clap::crate_name!(), "-i 127.0.0.1", "-i 192.168.1.157", "-p80,443", "-s SYN,UDP"];
+	let builder = ProbeBuilder::new(cli::Args::try_parse_from(arguments).unwrap(), [127, 0, 0, 1].into())?;
+	let probes: Vec<_> = builder.collect();
+	
+	let ip = Ipv4Packet::new(&probes[0].data).unwrap();
+	let tcp = TcpPacket::new(ip.payload()).unwrap();
+	assert_eq!(ip.get_destination(), Ipv4Addr::new(127, 0, 0, 1));
+	assert_eq!(tcp.get_flags(), u16::try_from(ScanType::SYN).unwrap());
+	assert_eq!(tcp.get_destination(), 80);
+
+	let ip = Ipv4Packet::new(&probes[1].data).unwrap();
+	let tcp = TcpPacket::new(ip.payload()).unwrap();
+	assert_eq!(ip.get_destination(), Ipv4Addr::new(192, 168, 1, 157));
+	assert_eq!(tcp.get_flags(), u16::try_from(ScanType::SYN).unwrap());
+	assert_eq!(tcp.get_destination(), 80);
+
+	let ip = Ipv4Packet::new(&probes[2].data).unwrap();
+	let udp = UdpPacket::new(ip.payload()).unwrap();
+	assert_eq!(ip.get_destination(), Ipv4Addr::new(127, 0, 0, 1));
+	assert_eq!(udp.get_destination(), 80);
+
+	let ip = Ipv4Packet::new(&probes[3].data).unwrap();
+	let udp = UdpPacket::new(ip.payload()).unwrap();
+	assert_eq!(ip.get_destination(), Ipv4Addr::new(192, 168, 1, 157));
+	assert_eq!(udp.get_destination(), 80);
+
+	let ip = Ipv4Packet::new(&probes[4].data).unwrap();
+	let tcp = TcpPacket::new(ip.payload()).unwrap();
+	assert_eq!(ip.get_destination(), Ipv4Addr::new(127, 0, 0, 1));
+	assert_eq!(tcp.get_flags(), u16::try_from(ScanType::SYN).unwrap());
+	assert_eq!(tcp.get_destination(), 443);
+	
+	Ok(())	
+}
 
 #[test]
 fn probe_builder_file_error() -> Result<(), Box<dyn std::error::Error>> {
@@ -248,7 +285,6 @@ fn probe_builder_file_error() -> Result<(), Box<dyn std::error::Error>> {
 	
 	Ok(())
 }
-
 
 #[test]
 fn probe_builder_no_ip() -> Result<(), Box<dyn std::error::Error>> {

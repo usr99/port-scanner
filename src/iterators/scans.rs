@@ -56,7 +56,7 @@ impl std::fmt::Display for Scan {
 
 impl Default for ArgIterator<Scan> {
 	fn default() -> Self {
-		Self { inner: vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP], next: 0 }
+		Self::from(vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP])
 	}
 }
 
@@ -68,23 +68,6 @@ impl std::fmt::Display for ArgIterator<Scan> {
 				false => ""
 			}))
 		})
-	}
-}
-
-impl Iterator for ArgIterator<Scan> {
-	type Item = Scan;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		let value;
-		if self.next < self.inner.len() {
-			value = Some(self.inner[self.next]);
-			self.next += 1;
-		} else {
-			value = None;
-			self.next = 0; // loops back
-		}
-
-		value
 	}
 }
 
