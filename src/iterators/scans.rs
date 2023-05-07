@@ -1,4 +1,4 @@
-use super::ArgIterator;
+use super::LoopIterator;
 use clap::error::ErrorKind;
 
 #[derive (Clone, Copy, Debug, PartialEq, Ord, PartialOrd, Eq)]
@@ -54,13 +54,13 @@ impl std::fmt::Display for Scan {
 	}
 }
 
-impl Default for ArgIterator<Scan> {
+impl Default for LoopIterator<Scan> {
 	fn default() -> Self {
 		Self::from(vec![Scan::SYN, Scan::NULL, Scan::ACK, Scan::FIN, Scan::XMAS, Scan::UDP])
 	}
 }
 
-impl std::fmt::Display for ArgIterator<Scan> {
+impl std::fmt::Display for LoopIterator<Scan> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		self.inner.iter().fold(Ok(()), |result, scan| {
 			result.and_then(|_| write!(f, "{}{}", scan, match scan != self.inner.last().unwrap() {
@@ -82,7 +82,7 @@ impl Parser {
 }
 
 impl clap::builder::TypedValueParser for Parser {
-	type Value = ArgIterator<Scan>;
+	type Value = LoopIterator<Scan>;
 
 	fn parse_ref(
 		&self,
@@ -93,7 +93,7 @@ impl clap::builder::TypedValueParser for Parser {
 		let inner = clap::builder::StringValueParser::new();
 		let str = inner.parse_ref(cmd, arg, raw_value)?;
 
-		let mut scans = ArgIterator::<Scan>::new();
+		let mut scans = LoopIterator::<Scan>::new();
 		for scan_name in str.split(',') { // ',' separates scan names
 			let scan_name = scan_name.trim().to_uppercase();
 			if scan_name.is_empty() {

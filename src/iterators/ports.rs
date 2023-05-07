@@ -1,4 +1,4 @@
-use super::ArgIterator;
+use super::LoopIterator;
 use clap::error::ErrorKind;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Copy)]
@@ -39,13 +39,13 @@ impl Iterator for Range {
 	}
 }
 
-impl Default for ArgIterator<Range> {
+impl Default for LoopIterator<Range> {
 	fn default() -> Self {
 		Self::from(vec![Range::new(1, 1024)])
 	}
 }
 
-impl std::fmt::Display for ArgIterator<Range> {
+impl std::fmt::Display for LoopIterator<Range> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		self.inner.iter().fold(Ok(()), |result, range| {
 			result.and_then(|_| write!(f, "{},", range))
@@ -112,7 +112,7 @@ impl Parser {
 }
 
 impl clap::builder::TypedValueParser for Parser {
-	type Value = ArgIterator<Range>;
+	type Value = LoopIterator<Range>;
 	
 	fn parse_ref(
 		&self,
@@ -153,6 +153,6 @@ impl clap::builder::TypedValueParser for Parser {
 		}
 
 		ports = Self::validate(ports, cmd)?;
-		Ok(ArgIterator::from(ports))
+		Ok(LoopIterator::from(ports))
 	}
 }

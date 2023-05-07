@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use clap::Parser;
 
-use crate::iterators::{ArgIterator, PortRange, ScanType};
+use crate::iterators::{LoopIterator, PortRange, ScanType};
 use crate::iterators::{ports, scans};
 
 #[derive(Parser, Debug)]
@@ -13,12 +13,12 @@ pub struct Args {
 	pub ip: Vec<String>,
 
 	/// Range of ports to scan
-	#[arg(short, long, default_value_t = ArgIterator::<PortRange>::default(), value_parser = ports::Parser)]
-	pub ports: ArgIterator<PortRange>,
+	#[arg(short, long, default_value_t = LoopIterator::<PortRange>::default(), value_parser = ports::Parser)]
+	pub ports: LoopIterator<PortRange>,
 
 	/// Scan types
-	#[arg(short, long, default_value_t = ArgIterator::<ScanType>::default(), value_parser = scans::Parser)]
-	pub scans: ArgIterator<ScanType>,
+	#[arg(short, long, default_value_t = LoopIterator::<ScanType>::default(), value_parser = scans::Parser)]
+	pub scans: LoopIterator<ScanType>,
 
 	/// Number of scans to run concurrently
 	#[arg(short, long, default_value_t = 1)]

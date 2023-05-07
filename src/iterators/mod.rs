@@ -12,24 +12,24 @@ pub use scans::Scan as ScanType;
 ** loops back to the beginning after returning None
 */
 #[derive(Clone, Debug)]
-pub struct ArgIterator<T: Display> {
+pub struct LoopIterator<T: Display> {
 	inner: Vec<T>,
 	next: usize
 }
 
-impl<T: Display> ArgIterator<T> {
+impl<T: Display> LoopIterator<T> {
 	pub fn new() -> Self {
 		Self { inner: vec![], next: 0 }
 	}
 }
 
-impl<T: Display> From<Vec<T>> for ArgIterator<T> {
+impl<T: Display> From<Vec<T>> for LoopIterator<T> {
 	fn from(value: Vec<T>) -> Self {
 		Self { inner: value, next: 0 }
 	}
 }
 
-impl<T: Display + PartialEq> PartialEq<Vec<T>> for ArgIterator<T> {
+impl<T: Display + PartialEq> PartialEq<Vec<T>> for LoopIterator<T> {
 	fn eq(&self, other: &Vec<T>) -> bool {
 		&self.inner == other
 	}
@@ -41,7 +41,7 @@ impl<T: Display + PartialEq> PartialEq<Vec<T>> for ArgIterator<T> {
 
 macro_rules! generic_iter_impl {
 	($generic:ty) => {
-		impl Iterator for ArgIterator<$generic> {
+		impl Iterator for LoopIterator<$generic> {
 			type Item = $generic;
 
 			fn next(&mut self) -> Option<Self::Item> {
@@ -64,7 +64,7 @@ macro_rules! generic_iter_impl {
 generic_iter_impl!(Ipv4Addr);
 generic_iter_impl!(ScanType);
 
-impl Iterator for ArgIterator<PortRange> {
+impl Iterator for LoopIterator<PortRange> {
 	type Item = u16;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -91,11 +91,11 @@ impl Iterator for ArgIterator<PortRange> {
 mod test {
 	use crate::iterators::ports::Range;
 	use crate::iterators::scans::Scan;
-	use super::ArgIterator;
+	use super::LoopIterator;
 
 	#[test]
 	fn port_iterator_basic() {
-		let mut ports = ArgIterator::from(vec![Range::new(1, 3), Range::new(7, 9)]);
+		let mut ports = LoopIterator::from(vec![Range::new(1, 3), Range::new(7, 9)]);
 	
 		assert_eq!(Some(1), ports.next());
 		assert_eq!(Some(2), ports.next());
@@ -110,7 +110,7 @@ mod test {
 	#[test]
 	fn port_iterator_one_elem() {
 		const VALUE: u16 = u16::MAX;
-		let mut oneshot = ArgIterator::from(vec![Range::new(VALUE, VALUE)]);
+		let mut oneshot = LoopIterator::from(vec![Range::new(VALUE, VALUE)]);
 	
 		assert_eq!(Some(VALUE), oneshot.next());
 		assert_eq!(None, oneshot.next());
@@ -119,14 +119,14 @@ mod test {
 	
 	#[test]
 	fn port_iterator_empty() {
-		let mut empty = ArgIterator::<Range>::from(vec![]);
+		let mut empty = LoopIterator::<Range>::from(vec![]);
 		assert_eq!(None, empty.next());
 		assert_eq!(None, empty.next());
 	}
 	
 	#[test]
 	fn scan_iterator_basic() {
-		let mut arr = ArgIterator::<Scan>::default();
+		let mut arr = LoopIterator::<Scan>::default();
 		
 		assert_eq!(Some(Scan::SYN), arr.next());
 		assert_eq!(Some(Scan::NULL), arr.next());
@@ -140,7 +140,7 @@ mod test {
 	
 	#[test]
 	fn scan_iterator_empty() {
-		let mut arr = ArgIterator::<Scan>::new();
+		let mut arr = LoopIterator::<Scan>::new();
 		assert_eq!(None, arr.next());
 		assert_eq!(None, arr.next());
 	}

@@ -12,13 +12,13 @@ pub mod report;
 pub mod response;
 
 use crate::cli;
-use crate::iterators::{ArgIterator, PortRange, ScanType};
+use crate::iterators::{LoopIterator, PortRange, ScanType};
 
 #[derive(Debug)]
 pub struct ProbeBuilder {
-	hosts: Peekable<ArgIterator<Ipv4Addr>>,
-	scans: Peekable<ArgIterator<ScanType>>,
-	ports: Peekable<ArgIterator<PortRange>>,
+	hosts: Peekable<LoopIterator<Ipv4Addr>>,
+	scans: Peekable<LoopIterator<ScanType>>,
+	ports: Peekable<LoopIterator<PortRange>>,
 	source_addr: Ipv4Addr,
 	source_port: u16,
 	tcp_seq: u32
@@ -66,7 +66,7 @@ impl ProbeBuilder {
 		hosts.dedup();
 
 		Ok(Self {
-			hosts: ArgIterator::from(hosts).peekable(),
+			hosts: LoopIterator::from(hosts).peekable(),
 			ports: options.ports.peekable(),
 			scans: options.scans.peekable(),
 			source_addr: source,
