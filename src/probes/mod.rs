@@ -11,7 +11,7 @@ use rand::Rng;
 pub mod report;
 pub mod response;
 
-use crate::cli;
+use crate::{cli, SCAN_NUM};
 use crate::iterators::{LoopIterator, PortRange, ScanType};
 
 #[derive(Debug)]
@@ -70,7 +70,7 @@ impl ProbeBuilder {
 			ports: options.ports.peekable(),
 			scans: options.scans.peekable(),
 			source_addr: source,
-			source_port: rand::thread_rng().gen_range(1025..=u16::MAX),
+			source_port: rand::thread_rng().gen_range(1025..=(u16::MAX - SCAN_NUM)),
 			tcp_seq: rand::random()
 		})
 	}
@@ -129,8 +129,6 @@ impl Iterator for ProbeBuilder {
 			}
 		}
 
-		println!("host: {host}, scan: {scan}, port: {port}");
-
 		let packet = &mut [0u8; 40];
 		let mut ip = MutableIpv4Packet::new(packet).unwrap();
 		ip.set_version(4);
@@ -171,7 +169,7 @@ impl Iterator for ProbeBuilder {
 		Some(Probe {
 			data: *packet,
 			destination: (host, port).into(),
-			source_port: self.source_port,
+			source_port: self.source_port + (scan as u16),
 			scan
 		})
 	}

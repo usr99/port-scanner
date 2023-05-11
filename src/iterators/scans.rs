@@ -1,7 +1,9 @@
 use super::LoopIterator;
 use clap::error::ErrorKind;
+use num_enum::IntoPrimitive;
 
-#[derive (Clone, Copy, Debug, PartialEq, Ord, PartialOrd, Eq)]
+#[derive (IntoPrimitive, Clone, Copy, Debug, PartialEq, Ord, PartialOrd, Eq)]
+#[repr(u8)]
 pub enum Scan { SYN, NULL, ACK, FIN, XMAS, UDP }
 
 impl From<Scan> for String {

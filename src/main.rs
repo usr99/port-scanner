@@ -2,7 +2,7 @@ use clap::Parser;
 use anyhow::{Result, anyhow};
 use mio::{Poll, Events, Token, unix::SourceFd, Interest};
 use std::{
-	time::{Instant, Duration},
+	time::Instant,
 	net::{Ipv4Addr, IpAddr}
 };
 use pnet::datalink::{self, NetworkInterface};
@@ -10,8 +10,7 @@ use socket::{Socket, SOCK_RAW, SOCK_DGRAM, htons};
 use libc::{AF_PACKET, ETH_P_ALL, AF_INET, IPPROTO_RAW};
 
 use port_scanner::{cli, probes::{self, report::Scanner}};
-
-const DELAY: Duration = Duration::from_millis(250);
+use port_scanner::DELAY;
 
 fn main() -> Result<()> {
 	let args = cli::Args::parse();

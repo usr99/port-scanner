@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::net::SocketAddr;
-use std::time::{Instant, Duration};
+use std::time::Instant;
 
 use pnet::packet::icmp::destination_unreachable::IcmpCodes;
-use pnet::packet::icmp::{IcmpTypes, IcmpCode};
+use pnet::packet::icmp::{IcmpTypes};
 use pnet::packet::tcp::TcpFlags;
 
 use num_enum::IntoPrimitive;
@@ -12,27 +12,17 @@ use num_enum::IntoPrimitive;
 use crate::iterators::ScanType;
 use super::Probe;
 use super::response::{Response, ResponseKind};
+use crate::{ACCEPTED_ICMP_CODES, DEFAULT_TIMEOUT};
 
 #[derive(IntoPrimitive, PartialEq, PartialOrd)]
 #[repr(u8)]
 enum PortStatus {
 	Filtered,
 	Unfiltered,
-	Closed,
 	OpenOrFiltered,
+	Closed,
 	Open
 }
-
-const ACCEPTED_ICMP_CODES: [IcmpCode; 6] = [
-	IcmpCodes::DestinationHostUnreachable,
-	IcmpCodes::DestinationProtocolUnreachable,
-	IcmpCodes::DestinationPortUnreachable,
-	IcmpCodes::NetworkAdministrativelyProhibited,
-	IcmpCodes::HostAdministrativelyProhibited,
-	IcmpCodes::CommunicationAdministrativelyProhibited
-];
-
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 impl TryFrom<(ResponseKind, ScanType)> for PortStatus {
 	type Error = ();
@@ -212,7 +202,6 @@ impl Scanner {
 			for probe in report.probes.values_mut() {
 				if let ProbeStatus::Waiting(time) = probe.0 {
 					if time.elapsed() > DEFAULT_TIMEOUT {
-						// all timedout probes should be updated as ResponseKind::NoResponse ===================================================================
 						probe.0 = ProbeStatus::TimedOut;
 						let status = PortStatus::try_from((ResponseKind::NoResponse, probe.1)).unwrap();
 						if report.status < status {
@@ -232,19 +221,5 @@ impl Scanner {
 		for report in self.inner.iter() {
 			println!("{} is {}", report.0, report.1.status);
 		}
-
-		// iter through all reports
-			// sort same hosts together
-		
-		// sort each host by port
-		// iter though everything
-			// print PortStatus
 	}
 }
-
-// PortStatus::TryFrom
-	// remove PortStatus::Unknown
-// Source port only changes for retransmission
-// Function to update status
-// test if all scans work
-// nice print function
